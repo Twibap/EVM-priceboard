@@ -26,12 +26,47 @@ db.once('open', ()=>{
 });
 mongoose.connect( dbUrl+dbName, {useNewUrlParser: true} );
 
+
 // Websocket to get Ethereum Price data from Upbit api
 const WebSocket = require('ws');
 var ws = new WebSocket('wss://api.upbit.com/websocket/v1');
 
+// Websocket for broadcast price info
+// const WebSocket = require('ws');
+const priceServer = new WebSocket.Server({ port : 8080});
+
+// Broadcast to all.
+priceServer.broadcast = function broadcast(data) {
+  priceServer.clients.forEach(function each(client) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+};
+
+// Client가 연결되었을 때
+priceServer.on('connection', function connection(ws) {
+	// ws == 연결된 Client
+  ws.on('message', function incoming(data) {
+		console.log( colors.info( "A client is connected" ) );
+		// 저장된 가격 보내기
+		Price
+			.find()
+			.sort({ "_id": -1 })
+			.limit(1)
+			.exec((err, price)=>{
+				if(err) console.log( colors.error( err ) );
+				var latestPrice = schemaToSimple(  price[0]  );
+				ws.send( JSON.stringify( latestPrice ) );
+				console.log( colors.info( "Serve latest price") );
+				console.log( colors.info( latestPrice ) );
+		});
+//		ws.send(" Connection OK!!! ")
+//		ws.send(" Echo - "+data);
+  });
+});
+
 ws.on('open', ()=>{
-	// TODO ticket field 문의사항 확인하기 
 	// https://dunamuhelp.zendesk.com/hc/ko/requests/388
 	var askMsg = '[{"ticket":"test"},{"type":"trade","codes":["KRW-ETH"], "isOnlyRealtime":"true"}]';
 	ws.send(askMsg);
@@ -47,23 +82,66 @@ ws.on('close',()=>{
 });
 
 var Price = require('./models/price');
+// Upbit으로부터 데이터를 수신했을 때
 ws.on('message', (data)=>{
 	var dataUpbit = JSON.parse(data);
 	//console.log( colors.debug( dataUpbit ) );
 
-	var dataEVMprice = dataToSchema(dataUpbit);
+	var dataEVMprice = jsonToSchema(dataUpbit);
 	dataEVMprice.save((error)=>{
 		if(error){
 			console.log( colors.error(error) );
 			return;
 		}
 	});
+	// dataEVMprice
+	//	{ _id: 5bed209ef89c00b6e130f18b,
+	//  type: 'trade',
+	//  code: 'KRW-ETH',
+	//  timestamp: 2018-11-15T07:30:38.395Z,
+	//  trade_date: '2018-11-15',
+	//  trade_time: '07:30:38',
+	//  trade_timestamp: 2018-11-15T07:30:38.000Z,
+	//  trade_price: 211000,
+	//  trade_volume: 1.35273559,
+	//  ask_bid: 'BID',
+	//  prev_closing_price: 214950,
+	//  change: 'FALL',
+	//  change_price: 3950,
+	//  sequential_id: 1542267038000001,
+	//  stream_type: 'REALTIME',
+	//  evm_price: 232100 }
 
-	console.log( colors.debug(dataEVMprice.toJSON() ) );
+	var jsonEVMprice = schemaToSimple(dataEVMprice);
+
+	priceServer.broadcast( JSON.stringify( jsonEVMprice ) );
+	console.log( colors.debug( jsonEVMprice ) );
 
 });
 
-var dataToSchema = (data)=>{	// data is JSON
+// --------- Functions ---------------------------------------
+var schemaToSimple = (schema)=>{
+	var jsonData = schema.toJSON();
+	delete jsonData["type"];
+	delete jsonData["code"];
+	delete jsonData["timestamp"];
+	delete jsonData["trade_date"];
+	delete jsonData["trade_time"];
+	delete jsonData["trade_timestamp"];
+	delete jsonData["trade_price"];
+	delete jsonData["trade_volume"];
+	delete jsonData["ask_bid"];
+	delete jsonData["prev_closing_price"];
+	delete jsonData["change"];
+	delete jsonData["change_price"];
+	delete jsonData["sequential_id"];
+	delete jsonData["stream_type"];
+
+	return jsonData;
+}
+
+var jsonToSchema = (data)=>{	// data is JSON
+
 	var schema = new Price();
 	schema.type = data.type;
 	schema.code = data.code;
