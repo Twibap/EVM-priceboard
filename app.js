@@ -81,19 +81,35 @@ ws.on('close',()=>{
 	ws = new WebSocket('wss://api.upbit.com/websocket/v1');
 });
 
-var Price = require('./models/price');
 // Upbit으로부터 데이터를 수신했을 때
+var Price = require('./models/price');
+var lastPrice = null;
 ws.on('message', (data)=>{
 	var dataUpbit = JSON.parse(data);
 	//console.log( colors.debug( dataUpbit ) );
 
 	var dataEVMprice = jsonToSchema(dataUpbit);
+	var simpleEVMprice = schemaToSimple(dataEVMprice);
+
+
+	if( lastPrice != null && dataUpbit.trade_price == lastPrice.trade_price){
+		console.log( colors.debug( simpleEVMprice ) );
+		return;	// 이전 가격과 수신한 가격이 같으면 저장하지 않는다.
+	} else {
+		console.log( colors.debug( simpleEVMprice ) + colors.info(" - save -") );
+		lastPrice = dataUpbit;
+	}
+
+	// Save full data
 	dataEVMprice.save((error)=>{
 		if(error){
 			console.log( colors.error(error) );
 			return;
 		}
 	});
+
+	// Broadcast simple data
+	priceServer.broadcast( JSON.stringify( simpleEVMprice ) );
 	// dataEVMprice
 	//	{ _id: 5bed209ef89c00b6e130f18b,
 	//  type: 'trade',
@@ -111,11 +127,6 @@ ws.on('message', (data)=>{
 	//  sequential_id: 1542267038000001,
 	//  stream_type: 'REALTIME',
 	//  evm_price: 232100 }
-
-	var jsonEVMprice = schemaToSimple(dataEVMprice);
-
-	priceServer.broadcast( JSON.stringify( jsonEVMprice ) );
-	console.log( colors.debug( jsonEVMprice ) );
 
 });
 
