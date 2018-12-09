@@ -14,18 +14,19 @@ priceServer.broadcast = function broadcast(data) {
 };
 
 // Client가 연결되었을 때
+const schema = require("./schema");
 priceServer.on('connection', function connection(ws) {
 	// ws == 연결된 Client
   ws.on('message', function incoming(data) {
 		console.log( colors.info( "A client is connected" ) );
 		// 저장된 가격 보내기
-		Price
+		schema.Price
 			.find()
 			.sort({ "_id": -1 })
 			.limit(1)
 			.exec((err, price)=>{
 				if(err) console.log( colors.error( err ) );
-				var latestPrice = schemaToSimple(  price[0]  );
+				var latestPrice = schema.toSimple(  price[0]  );
 				ws.send( JSON.stringify( latestPrice ) );
 				console.log( colors.info( "Serve latest price") );
 				console.log( colors.info( latestPrice ) );
