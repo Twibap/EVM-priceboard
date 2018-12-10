@@ -4,34 +4,30 @@ const colors = require("./colors")
 priceServer = require("./evm-server.js");
 
 // Websocket for Upbit Api
-const WebSocket = require('ws');
-let ws = new WebSocket('wss://api.upbit.com/websocket/v1');
+const WebSocketClient = require('./ws-client.js');
+const upbitClient = new WebSocketClient('wss://api.upbit.com/websocket/v1');
 
-ws.on('open', ()=>{
+upbitClient.onopen = ()=>{
+	console.log( colors.info('Upbit api is connected'));
 	// https://dunamuhelp.zendesk.com/hc/ko/requests/388
 	var askMsg = '[{"ticket":"test"},{"type":"trade","codes":["KRW-ETH"], "isOnlyRealtime":"true"}]';
-	ws.send(askMsg);
-	console.log( colors.info('Websocket open, Send - ') + colors.input(askMsg) );
-});
+	upbitClient.send(askMsg);
+	console.log( colors.info('Send - ') + colors.input(askMsg) );
+};
 
-ws.on('close',( code, reason )=>{
+upbitClient.onclose = ( code )=>{
 	console.log( colors.error("Websocket is disconnected" ) );
 	console.log( colors.error("OnClose called "+ code) );
-	console.log( colors.error("Reason is "+ reason) );
+};
 
-	// 연결 유지
-	// not working
-	return new WebSocket('wss://api.upbit.com/websocket/v1');
-});
-
-ws.on('error', (error)=>{
+upbitClient.onerror = (error)=>{
 	console.log( colors.error( error.toString() ) );
-})
+};
 
 // Upbit으로부터 데이터를 수신했을 때
 const schema = require("./schema");
 var lastPrice = null;
-ws.on('message', (data)=>{
+upbitClient.onmessage = (data)=>{
 	var dataUpbit = JSON.parse(data);
 	//console.log( colors.debug( dataUpbit ) );
 
@@ -75,5 +71,5 @@ ws.on('message', (data)=>{
 	//  stream_type: 'REALTIME',
 	//  evm_price: 232100 }
 
-});
+};
 
